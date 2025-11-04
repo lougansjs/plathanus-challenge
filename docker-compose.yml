@@ -1,0 +1,9 @@
+services:
+  plathanus:
+    build:
+      context: .
+      dockerfile: dockerfile
+    container_name: plathanus-converter
+    stdin_open: true
+    tty: true
+    restart: "no"
