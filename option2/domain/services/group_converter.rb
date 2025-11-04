@@ -9,22 +9,22 @@ module Domain
       end
 
       def convert(group)
-        return '' if group.value.zero?
+        return '' if group.zero?
 
         parts = []
-        parts << hundreds_text(group.value)
-        parts << tens_and_units_text(group.value % 100)
+        parts << hundreds_text(group)
+        parts << tens_and_units_text(group.tens_and_units)
 
         join_group_parts(parts)
       end
 
       private
 
-      def hundreds_text(value)
-        hundreds = value / 100
+      def hundreds_text(group)
+        hundreds = group.hundreds
         return '' if hundreds.zero?
 
-        value == 100 ? 'cem' : @vocabulary_provider.hundreds[hundreds]
+        group.one_hundred? ? 'cem' : @vocabulary_provider.hundreds[hundreds]
       end
 
       # rubocop:disable Metrics/MethodLength

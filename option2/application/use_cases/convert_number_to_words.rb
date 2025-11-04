@@ -25,11 +25,11 @@ module Application
       def build_parts(groups)
         parts = []
         groups.each_with_index do |group, index|
-          next if group.value.zero?
+          next if group.zero?
 
           scale_index = groups.size - index - 1
           # Regra especial: quando é mil (scale_index == 1) e o grupo é 1, não mostra "um"
-          if scale_index == 1 && group.value == 1
+          if scale_index == 1 && group.one?
             scale_name = @scale_manager.scale_name(group, scale_index)
             parts << {
               text: scale_name,

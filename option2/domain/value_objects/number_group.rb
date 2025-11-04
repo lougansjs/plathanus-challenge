@@ -16,6 +16,50 @@ module Domain
         @value.zero?
       end
 
+      # Retorna as centenas do grupo (0-9)
+      def hundreds
+        @value / 100
+      end
+
+      # Retorna dezenas e unidades (0-99)
+      def tens_and_units
+        @value % 100
+      end
+
+      # Verifica se o grupo é igual a 1
+      def one?
+        @value == 1
+      end
+
+      # Verifica se o grupo é igual a 100
+      def one_hundred?
+        @value == 100
+      end
+
+      # Compara se o grupo é menor ou igual a um valor
+      def <=(other)
+        comparison_value = other.is_a?(Integer) ? other : other.value
+        @value <= comparison_value
+      end
+
+      # Compara se o grupo é menor que um valor
+      def <(other)
+        comparison_value = other.is_a?(Integer) ? other : other.value
+        @value < comparison_value
+      end
+
+      # Compara se o grupo é maior ou igual a um valor
+      def >=(other)
+        comparison_value = other.is_a?(Integer) ? other : other.value
+        @value >= comparison_value
+      end
+
+      # Compara se o grupo é maior que um valor
+      def >(other)
+        comparison_value = other.is_a?(Integer) ? other : other.value
+        @value > comparison_value
+      end
+
       def ==(other)
         other.is_a?(self.class) && other.value == @value
       end
