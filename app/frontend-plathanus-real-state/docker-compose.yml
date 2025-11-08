@@ -1,0 +1,28 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: frontend-plathanus
+    ports:
+      - "3000:3000"
+    volumes:
+      # Montar o código fonte para hot-reload
+      - .:/app
+      # Excluir node_modules do volume para usar os do container
+      - /app/node_modules
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    networks:
+      - plathanus-network
+
+networks:
+  plathanus-network:
+    name: plathanus-network
+    driver: bridge
+

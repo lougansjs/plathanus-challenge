@@ -1,0 +1,46 @@
+# Dependências
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Build outputs
+.nuxt
+.output
+.nitro
+.data
+.cache
+dist
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+.fleet
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Outros
+README.md
+
