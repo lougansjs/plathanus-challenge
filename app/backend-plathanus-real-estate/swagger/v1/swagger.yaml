@@ -1,0 +1,893 @@
+openapi: 3.0.1
+info:
+  title: Plathannus Imóveis API
+  version: 1.0.0
+  description: |
+    API para gerenciamento de imóveis.
+    
+    ## Autenticação
+    A API usa JWT para autenticação. Para obter um token, faça login em `/api/v1/auth/login`.
+    Inclua o token no header `Authorization: Bearer <token>` em todas as requisições protegidas.
+    
+    ## Versionamento
+    A versão atual da API é **1.0.0**. A versão é retornada no header `API-Version` de todas as respostas.
+    
+    ## Rate Limiting
+    - Tentativas de login: 5 a cada 20 minutos por IP
+
+servers:
+  - url: http://localhost:3001/api/v1
+    description: Servidor de desenvolvimento
+
+tags:
+  - name: Properties
+    description: Operações relacionadas a imóveis
+  - name: Categories
+    description: Operações relacionadas a categorias
+  - name: Authentication
+    description: Autenticação de administradores
+
+paths:
+  /properties:
+    get:
+      tags:
+        - Properties
+      summary: Lista imóveis
+      description: Retorna uma lista paginada de imóveis com filtros opcionais
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 12
+            maximum: 100
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [recent, price_asc, price_desc, area_desc]
+            default: recent
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Busca por nome, descrição, cidade ou bairro
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Alias para o parâmetro search
+        - name: city
+          in: query
+          schema:
+            type: string
+          description: Filtra por cidade (busca parcial, case-insensitive)
+        - name: rooms
+          in: query
+          schema:
+            type: array
+            items:
+              type: integer
+          description: Filtra por número de quartos (aceita múltiplos valores)
+          style: form
+          explode: true
+        - name: rooms_min
+          in: query
+          schema:
+            type: integer
+          description: Mínimo de quartos (alternativa ao array rooms)
+        - name: bathrooms
+          in: query
+          schema:
+            type: array
+            items:
+              type: integer
+          description: Filtra por número de banheiros (aceita múltiplos valores)
+          style: form
+          explode: true
+        - name: parking_slots
+          in: query
+          schema:
+            type: array
+            items:
+              type: integer
+          description: Filtra por número de vagas de garagem (aceita múltiplos valores)
+          style: form
+          explode: true
+        - name: price_min
+          in: query
+          schema:
+            type: number
+            format: float
+          description: Preço mínimo
+        - name: price_max
+          in: query
+          schema:
+            type: number
+            format: float
+          description: Preço máximo
+        - name: furnished
+          in: query
+          schema:
+            type: boolean
+          description: Filtra por mobiliado (true) ou não mobiliado (false)
+        - name: apartment_amenities
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [wifi, smart_tv, air_conditioning, oven, microwave, stove, linen_towels, kitchen, balcony, washer_dryer]
+          description: Filtra por comodidades do apartamento
+          style: form
+          explode: true
+        - name: building_characteristics
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [parking, pets_allowed, gym, gated_building, breakfast, sauna, elevator, doorman, coworking, pool]
+          description: Filtra por características do prédio
+          style: form
+          explode: true
+        - name: pets_allowed
+          in: query
+          schema:
+            type: boolean
+          description: Filtra por aceita pets (true) - verifica em building_characteristics
+      responses:
+        '200':
+          description: Lista de imóveis retornada com sucesso
+          headers:
+            API-Version:
+              schema:
+                type: string
+                example: "1.0.0"
+              description: Versão da API
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Property'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+              example:
+                data:
+                  - id: 1
+                    name: "Apartamento Moderno"
+                    status: "available"
+                    rooms: 3
+                    bathrooms: 2
+                    price: 2500.00
+                meta:
+                  page: 1
+                  per_page: 12
+                  total_pages: 5
+                  total_count: 58
+        '400':
+          description: Requisição inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erro interno do servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Properties
+      summary: Cria um novo imóvel
+      description: Requer autenticação de administrador
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PropertyCreate'
+      responses:
+        '201':
+          description: Imóvel criado com sucesso
+          headers:
+            API-Version:
+              schema:
+                type: string
+                example: "1.0.0"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
+        '400':
+          description: Requisição inválida (parâmetros faltando)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Não autorizado (token JWT inválido ou ausente)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Não autorizado"
+        '422':
+          description: Erro de validação
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+              example:
+                error: "validation_error"
+                details:
+                  - "Photos deve ter entre 3 e 5 fotos"
+                  - "Name não pode estar em branco"
+
+  /properties/{id}:
+    get:
+      tags:
+        - Properties
+      summary: Mostra um imóvel específico
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Detalhes do imóvel retornados com sucesso
+          headers:
+            API-Version:
+              schema:
+                type: string
+                example: "1.0.0"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
+        '404':
+          description: Imóvel não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "not_found"
+                message: "Couldn't find Property with 'id'=999"
+
+    put:
+      tags:
+        - Properties
+      summary: Atualiza um imóvel
+      description: Requer autenticação de administrador
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PropertyUpdate'
+      responses:
+        '200':
+          description: Imóvel atualizado com sucesso
+          headers:
+            API-Version:
+              schema:
+                type: string
+                example: "1.0.0"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
+        '400':
+          description: Requisição inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Não autorizado (token JWT inválido ou ausente)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Imóvel não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Erro de validação
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+    delete:
+      tags:
+        - Properties
+      summary: Remove um imóvel
+      description: Requer autenticação de administrador
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Imóvel removido com sucesso (sem conteúdo na resposta)
+        '401':
+          description: Não autorizado (token JWT inválido ou ausente)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Imóvel não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /properties/{id}/delete_photo:
+    delete:
+      tags:
+        - Properties
+      summary: Remove uma foto de um imóvel
+      description: |
+        Remove uma foto específica de um imóvel usando o signed_id da foto.
+        Requer autenticação de administrador.
+        O imóvel deve ter pelo menos 3 fotos após a remoção.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID do imóvel
+        - name: signed_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: ID assinado da foto a ser removida (obtido do campo signed_id na resposta de photos)
+      responses:
+        '204':
+          description: Foto removida com sucesso (sem conteúdo na resposta)
+        '400':
+          description: Requisição inválida (signed_id não fornecido ou inválido)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing_signed_id:
+                  value:
+                    error: "signed_id é obrigatório"
+                invalid_signed_id:
+                  value:
+                    error: "ID de foto inválido"
+        '401':
+          description: Não autorizado (token JWT inválido ou ausente)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Imóvel ou foto não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Foto não encontrada"
+        '422':
+          description: Não é possível deletar (imóvel deve ter pelo menos 3 fotos)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Não é possível deletar. O imóvel deve ter pelo menos 3 fotos"
+
+  /categories:
+    get:
+      tags:
+        - Categories
+      summary: Lista categorias
+      responses:
+        '200':
+          description: Lista de categorias retornada com sucesso
+          headers:
+            API-Version:
+              schema:
+                type: string
+                example: "1.0.0"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+              example:
+                - id: 1
+                  name: "Apartamento"
+                - id: 2
+                  name: "Casa"
+                - id: 3
+                  name: "Studio"
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Autentica um administrador
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Login realizado com sucesso
+          headers:
+            API-Version:
+              schema:
+                type: string
+                example: "1.0.0"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: Token JWT para autenticação
+                    example: "eyJhbGciOiJIUzI1NiJ9.eyJhZG1pbl9pZCI6MSwiZXhwIjoxNzMxMjM0NTY3fQ..."
+                  message:
+                    type: string
+                    example: "Login realizado com sucesso"
+        '401':
+          description: Credenciais inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Credenciais inválidas"
+
+  /auth/verify:
+    get:
+      tags:
+        - Authentication
+      summary: Verifica se um token é válido
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Token válido
+          headers:
+            API-Version:
+              schema:
+                type: string
+                example: "1.0.0"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Token válido"
+        '401':
+          description: Token inválido, expirado ou não fornecido
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    examples:
+                      no_token:
+                        value:
+                          valid: false
+                          message: "Token não fornecido"
+                      invalid_token:
+                        value:
+                          valid: false
+                          message: "Token inválido ou expirado"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Property:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        code:
+          type: string
+        status:
+          type: string
+          enum: [available, unavailable, rented, maintenance, archived]
+        rooms:
+          type: integer
+        bathrooms:
+          type: integer
+        area:
+          type: integer
+        parking_slots:
+          type: integer
+        furnished:
+          type: boolean
+        contract_type:
+          type: string
+          enum: [rent]
+        description:
+          type: string
+        price:
+          type: number
+          format: float
+        promotional_price:
+          type: number
+          format: float
+        available_from:
+          type: string
+          format: date
+        apartment_amenities:
+          type: array
+          items:
+            type: string
+        building_characteristics:
+          type: array
+          items:
+            type: string
+        photos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Photo'
+        category:
+          $ref: '#/components/schemas/Category'
+        address:
+          $ref: '#/components/schemas/Address'
+        rooms_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/Room'
+          description: Lista de quartos com detalhes
+        cover_photo:
+          oneOf:
+            - $ref: '#/components/schemas/Photo'
+            - type: "null"
+          nullable: true
+          description: Foto de capa (terceira foto ou null se não houver)
+        created_at:
+          type: string
+          format: date-time
+
+    PropertyCreate:
+      type: object
+      required:
+        - name
+        - status
+        - category_id
+        - rooms
+        - bathrooms
+        - area
+        - contract_type
+        - photos
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        status:
+          type: string
+          enum: [available, unavailable, rented, maintenance, archived]
+        category_id:
+          type: integer
+        rooms:
+          type: integer
+        bathrooms:
+          type: integer
+        area:
+          type: integer
+        parking_slots:
+          type: integer
+        furnished:
+          type: boolean
+        contract_type:
+          type: string
+          enum: [rent]
+        description:
+          type: string
+          maxLength: 5000
+        price:
+          type: number
+        promotional_price:
+          type: number
+        available_from:
+          type: string
+          format: date
+        apartment_amenities:
+          type: array
+          items:
+            type: string
+            enum: [wifi, smart_tv, air_conditioning, oven, microwave, stove, linen_towels, kitchen, balcony, washer_dryer]
+          description: Comodidades do apartamento (whitelist validada)
+        building_characteristics:
+          type: array
+          items:
+            type: string
+            enum: [parking, pets_allowed, gym, gated_building, breakfast, sauna, elevator, doorman, coworking, pool]
+          description: Características do prédio (whitelist validada)
+        rooms_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoomInput'
+          description: Lista de quartos com detalhes
+        photos:
+          type: array
+          items:
+            type: string
+            format: binary
+          description: Arquivos de imagem (3-5 fotos obrigatórias, JPEG/PNG/WebP, máx 10MB cada)
+        address:
+          $ref: '#/components/schemas/AddressInput'
+
+    PropertyUpdate:
+      type: object
+      description: Todos os campos são opcionais (apenas os fornecidos serão atualizados)
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        status:
+          type: string
+          enum: [available, unavailable, rented, maintenance, archived]
+        category_id:
+          type: integer
+        rooms:
+          type: integer
+        bathrooms:
+          type: integer
+        area:
+          type: integer
+        parking_slots:
+          type: integer
+        furnished:
+          type: boolean
+        contract_type:
+          type: string
+          enum: [rent]
+        description:
+          type: string
+          maxLength: 5000
+        price:
+          type: number
+          format: float
+        promotional_price:
+          type: number
+          format: float
+        available_from:
+          type: string
+          format: date
+        apartment_amenities:
+          type: array
+          items:
+            type: string
+            enum: [wifi, smart_tv, air_conditioning, oven, microwave, stove, linen_towels, kitchen, balcony, washer_dryer]
+        building_characteristics:
+          type: array
+          items:
+            type: string
+            enum: [parking, pets_allowed, gym, gated_building, breakfast, sauna, elevator, doorman, coworking, pool]
+        rooms_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoomInput'
+        photos:
+          type: array
+          items:
+            type: string
+            format: binary
+          description: Novas fotos a serem adicionadas (total não pode exceder 5 fotos)
+        address:
+          $ref: '#/components/schemas/AddressInput'
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+
+    Address:
+      type: object
+      properties:
+        street:
+          type: string
+        neighborhood:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        zipcode:
+          type: string
+        latitude:
+          type: number
+          format: float
+        longitude:
+          type: number
+          format: float
+
+    AddressInput:
+      type: object
+      properties:
+        street:
+          type: string
+        neighborhood:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        zipcode:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+
+    Photo:
+      type: object
+      properties:
+        thumb_url:
+          type: string
+          format: uri
+        card_url:
+          type: string
+          format: uri
+        cover_url:
+          type: string
+          format: uri
+        original_url:
+          type: string
+          format: uri
+        signed_id:
+          type: string
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Página atual
+          example: 1
+        per_page:
+          type: integer
+          description: Itens por página
+          example: 12
+        total_pages:
+          type: integer
+          description: Total de páginas
+          example: 5
+        total_count:
+          type: integer
+          description: Total de itens
+          example: 58
+
+    Room:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "Quarto Master"
+        type:
+          type: string
+          example: "bedroom"
+        description:
+          type: string
+          example: "Quarto principal com armário embutido"
+
+    RoomInput:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        description:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Tipo do erro
+          examples:
+            - "not_found"
+            - "bad_request"
+            - "internal_server_error"
+            - "Não autorizado"
+        message:
+          type: string
+          description: Mensagem de erro descritiva
+          example: "Couldn't find Property with 'id'=999"
+
+    ValidationError:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "validation_error"
+        details:
+          type: array
+          items:
+            type: string
+          description: Lista de erros de validação
+          example:
+            - "Photos deve ter entre 3 e 5 fotos"
+            - "Name não pode estar em branco"
+            - "Price deve ser maior ou igual a 0"
+
