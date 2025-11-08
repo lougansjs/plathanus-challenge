@@ -1,0 +1,43 @@
+#!/bin/bash -e
+
+# Enable jemalloc for reduced memory usage and latency.
+if [ -z "${LD_PRELOAD+x}" ]; then
+    LD_PRELOAD=$(find /usr/lib -name libjemalloc.so.2 -print -quit)
+    export LD_PRELOAD
+fi
+
+# Remove server.pid if it exists
+if [ -f tmp/pids/server.pid ]; then
+  echo "Removendo server.pid existente..."
+  rm -f tmp/pids/server.pid
+fi
+
+# Install gems if needed
+echo "Instalando gems..."
+bundle install
+
+# Wait for PostgreSQL to be ready with timeout
+echo "Aguardando PostgreSQL estar pronto..."
+MAX_RETRIES=60
+RETRY_COUNT=0
+until pg_isready -h "${DATABASE_HOST:-db}" -p "${DATABASE_PORT:-5432}" -U "${DATABASE_USERNAME:-postgres}" 2>/dev/null; do
+  RETRY_COUNT=$((RETRY_COUNT + 1))
+  if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+    echo "Erro: PostgreSQL não está respondendo após $MAX_RETRIES tentativas"
+    exit 1
+  fi
+  echo "PostgreSQL não está pronto ainda, aguardando... (tentativa $RETRY_COUNT/$MAX_RETRIES)"
+  sleep 2
+done
+
+echo "PostgreSQL está pronto!"
+
+# Create database if it doesn't exist
+echo "Criando banco de dados se não existir..."
+./bin/rails db:create 2>/dev/null || echo "Banco de dados já existe ou erro ao criar"
+
+# Run pending migrations
+echo "Executando migrations pendentes..."
+./bin/rails db:migrate
+
+exec "${@}"
